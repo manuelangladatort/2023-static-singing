@@ -1,0 +1,3 @@
+psynet@git+https://gitlab.com/PsyNetDev/PsyNet#egg=psynet
+sing4me@git+https://gitlab.com/computational-audition/sing4me#egg=sing4me
+pytest
