@@ -16,9 +16,9 @@ from psynet.trial.audio import AudioRecordTrial
 
 # experiment
 from .consent import consent  # TODO: use my Oxford consent here whean ready
-from .instructions import instructions
+from .instructions import instructions, requirements
 from .questionnaire import debrief, questionnaire, STOMPR, TIPI
-from .pre_screens import volume_calibration, audio_output_question, audio_input_question, mic_test
+from .pre_screens import volume_calibration, audio_output_question, audio_input_question, mic_test, get_voice_register
 from .params import singing_2intervals
 
 # sing4me
@@ -26,9 +26,9 @@ from sing4me import singing_extract as sing
 from sing4me import melodies
 
 
-##########################################################################################
+########################################################################################################################
 # Global
-##########################################################################################
+########################################################################################################################
 TIME_ESTIMATE_TRIAL = 10
 
 # Set the size and range of the grid for the stimulus space
@@ -94,9 +94,9 @@ melody_duration, singing_duration = estimate_time_per_trial(
             TIME_AFTER_SINGING
         )
 
-##########################################################################################
+########################################################################################################################
 # Stimuli
-##########################################################################################
+########################################################################################################################
 # Here we define the stimulus set in an analogous way to the static_audio demo,
 # except we randomise the start_frequency from a continuous range.
 
@@ -130,7 +130,7 @@ def equipment_test():
     # Ask about what equipment they are using
     return Module(
         "equipment_test",
-        volume_calibration(),
+        volume_calibration(TIMBRE, note_duration_tonejs, note_silence_tonejs),
         audio_output_question(),
         audio_input_question(),
         mic_test(),
@@ -298,25 +298,14 @@ class Exp(psynet.experiment.Experiment):
     }
 
     timeline = Timeline(
-        NoConsent(),
-        InfoPage(
-            "This experiment requires you to wear headphones. Please ensure you have plugged yours in now.",
-            time_estimate=3,
-        ),
-        CodeBlock(lambda participant: participant.var.set("register", "low")),  # here I'm cheating and setting register manually
-        # volume_calibration(TIMBRE, note_duration_tonejs, note_silence_tonejs),
-        # InfoPage(
-        #     """
-        #     We will now perform a short listening test to verify that your audio is working properly.
-        #     This test will be difficult to pass unless you listen carefully over your headphones.
-        #     Press 'Next' when you are ready to start.
-        #     """,
-        #     time_estimate=5,
-        # ),
-        # AntiphaseHeadphoneTest(),
+        NoConsent(),  # add consent
+        requirements(),
         instructions(),
+        equipment_test(),
+        # get_voice_register(),  # not working
+        CodeBlock(lambda participant: participant.var.set("register", "low")),  # only for debugging
         StaticTrialMaker(
-            id_="singing_main_experiment",
+            id_="static_singing_trialmaker",
             trial_class=SingingTrial,
             nodes=nodes,
             expected_trials_per_participant=TRIALS_PER_PARTICIPANT,

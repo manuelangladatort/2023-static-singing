@@ -7,14 +7,20 @@ html = tags.div()
 with html:
     tags.p(
         """
-        In the main part of this experiment you will [EXPLAIN TASK]
+        In this experiment you will hear melodies and be asked to sing them back as accurately as possible.
         """
     )
 
     tags.p(
         """
-        We will monitor the answers you give throughout the experiment, and will give a small additional bonus
-        if you give high-quality and reliable responses. 
+        Sing each note in the melody clearly using the syllable 'TA' and leave silent gaps between notes.
+        """
+    )
+
+    tags.p(
+        """
+        We will monitor your responses throughout the experiment, and will give a small additional bonus
+        if your singing performance is good. 
         """
     )
 
@@ -24,5 +30,20 @@ with html:
         """
     )
 
+
 def instructions():
+    return InfoPage(html, time_estimate=15)
+
+
+def requirements():
+    html = tags.div()
+    with html:
+        tags.p(
+            "For this experiment we need to you to be sitting in a quiet room with a good internet connection. "
+            "If you can, please wear headphones or earphones for the best experience; "
+            "however, we ask that you do not wear wireless headphones/earphones (e.g. EarPods), "
+            "because they often introduce recording issues. "
+            "If you are not able to satisfy these requirements currently, please try again later."
+        )
+
     return InfoPage(html, time_estimate=15)

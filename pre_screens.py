@@ -148,11 +148,11 @@ def mic_test():
     )
 
 
-def get_voice_type():
+def get_voice_register():
     return Module(
-        "get_voice_type",
+        "get_voice_register",
         ModularPage(
-            "get_voice_type",
+            "get_voice_register",
             tags.p(
                 "We'd like to play chords that fill well with your vocal range. ",
                 "What voice type best describes you?"
@@ -169,7 +169,7 @@ def get_voice_type():
         ),
         CodeBlock(lambda participant: participant.var.set(
             "register",
-            participant.var.voice_type,
+            participant.var.get_voice_register,
             )
         )
     )
