@@ -302,9 +302,9 @@ class Exp(psynet.experiment.Experiment):
 
     timeline = Timeline(
         NoConsent(),  # add consent
-        # requirements(),
-        # instructions(),
-        # equipment_test(),
+        requirements(),
+        instructions(),
+        equipment_test(),
         # get_voice_register(),  # not working
         CodeBlock(lambda participant: participant.var.set("register", "low")),  # only for debugging
         StaticTrialMaker(
