@@ -1,21 +1,22 @@
 import numpy as np
 from flask import Markup
-from dominate import tags
 
 import psynet.experiment
 from psynet.asset import ExperimentAsset, Asset, LocalStorage, DebugStorage, FastFunctionAsset, S3Storage  # noqa
 from psynet.consent import NoConsent
-from psynet.modular_page import PushButtonControl, ModularPage, AudioPrompt, AudioRecordControl
+from psynet.modular_page import ModularPage, AudioRecordControl
 from psynet.js_synth import JSSynth, Note, HarmonicTimbre
-from psynet.timeline import Timeline, Event
 
 from psynet.page import InfoPage, SuccessfulEndPage
 from psynet.timeline import Event, ProgressDisplay, ProgressStage, Timeline, CodeBlock, Module
 from psynet.trial.static import StaticNode, StaticTrial, StaticTrialMaker
 from psynet.trial.audio import AudioRecordTrial
 
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 # experiment
-from .consent import consent  # TODO: use my Oxford consent here whean ready
+from .consent import consent
 from .instructions import instructions, requirements
 from .questionnaire import debrief, questionnaire, STOMPR, TIPI
 from .pre_screens import volume_calibration, audio_output_question, audio_input_question, mic_test, get_voice_register
@@ -25,16 +26,15 @@ from .params import singing_2intervals
 from sing4me import singing_extract as sing
 from sing4me import melodies
 
-
 ########################################################################################################################
 # Global
 ########################################################################################################################
 TIME_ESTIMATE_TRIAL = 10
-
-# Set the size and range of the grid for the stimulus space
 NUM_PARTICIPANTS = 100
+NUM_MELODIES = 5  # this is the total number of stimuli/ nodes
+TRIALS_PER_PARTICIPANT = NUM_MELODIES  # in this experiment num nodes is the same as num trials per participant
 
-N_REPEAT_TRIALS = 6
+N_REPEAT_TRIALS = 3
 INITIAL_RECRUIT_SIZE = 20
 SAVE_PLOT = True
 
@@ -44,11 +44,10 @@ roving_mean = dict(
     default=55,
     low=49,
     high=61
-    )
+)
 
 NUM_NOTES = 3
 NUM_INT = NUM_NOTES - 1
-
 SYLLABLE = "TA"
 TIME_AFTER_SINGING = 1
 
@@ -78,7 +77,7 @@ pitch_duration = note_duration_tonejs + note_silence_tonejs
 
 # durations
 def estimate_time_per_trial(
-    # estimate time for trials: melody and singing duration
+        # estimate time for trials: melody and singing duration
         pitch_duration,
         num_pitches,
         time_after_singing
@@ -89,37 +88,49 @@ def estimate_time_per_trial(
 
 
 melody_duration, singing_duration = estimate_time_per_trial(
-            pitch_duration,
-            (NUM_NOTES + 1),
-            TIME_AFTER_SINGING
-        )
+    pitch_duration,
+    (NUM_NOTES + 1),
+    TIME_AFTER_SINGING
+)
+
 
 ########################################################################################################################
 # Stimuli
 ########################################################################################################################
-# Here we define the stimulus set in an analogous way to the static_audio demo,
-# except we randomise the start_frequency from a continuous range.
-
-# TODO: Kevin, we just want to use integer semitones, and make sure the trials per particiapnt is right
-# TODO: 120 trials maximum
-
-grid_size = 11
-grid_range = 5
-
-TRIALS_PER_PARTICIPANT = grid_size * grid_size  # TODO: this calculation is wrong
-
+# This is how we generate melodies based on a reference_pitch, max_interval2reference, and number of notes
+def generate_random_melody(mel_id, roving_mean, roving_width, max_interval2reference, num_notes):
+    # sample reference pitch
+    reference_pitch = melodies.sample_reference_pitch(
+        roving_mean,
+        roving_width,
+    )
+    # sample pitches
+    target_pitches = melodies.sample_absolute_pitches(
+        reference_pitch=reference_pitch,
+        max_interval2reference=max_interval2reference,
+        num_pitches=num_notes
+    )
+    # get intervals
+    target_intervals = melodies.convert_absolute_pitches_to_interval_sequence(target_pitches, "previous_note")
+    # get intervals from pitch to reference pitch
+    target_intervals2reference = melodies.convert_absolute_pitches_to_intervals2reference(
+        target_pitches, reference_pitch
+    )
+    return dict(
+        melody_id="Melody_" + str(mel_id),
+        reference_pitch=reference_pitch,
+        target_pitches=target_pitches,
+        target_intervals=target_intervals,
+        target_intervals2reference=target_intervals2reference
+    )
 
 nodes = [
     StaticNode(
         definition={
-            # "intervals": interval,
-            "target_x_int": x,
-            "target_y_int": y,
+            "melody": generate_random_melody(i, roving_mean["high"], roving_width, MAX_INTERVAL2REFERENCE, NUM_NOTES)
         },
     )
-    for x in np.linspace(-grid_range, grid_range, grid_size)
-    for y in np.linspace(-grid_range, grid_range, grid_size)
-    # for interval in intervals
+    for i in range(1, (NUM_MELODIES + 1))
 ]
 
 
@@ -139,41 +150,30 @@ def equipment_test():
 
 class SingingTrial(AudioRecordTrial, StaticTrial):
     time_estimate = TIME_ESTIMATE_TRIAL
+
     # wait_for_feedback = True
-
-    def finalize_definition(self, definition, experiment, participant):
-        reference_pitch = melodies.sample_reference_pitch(
-            roving_mean["high"],
-            roving_width,
-        )
-        definition["reference_pitch"] = reference_pitch
-
-        intervals = [definition["target_x_int"], definition["target_y_int"]]
-        definition["target_intervals"] = intervals
-
-        definition["target_pitches"] = melodies.convert_interval_sequence_to_absolute_pitches(
-                intervals=intervals,
-                reference_pitch=reference_pitch,
-                reference_mode="previous_note",   # pitch mode
-            )
-        return definition
 
     def show_trial(self, experiment, participant):
 
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=56922, stdoutToServer=True, stderrToServer=True)
+
+        melody = self.definition
+
         # convert to right register
         if self.participant.var.register == "high":
-            target_pitches = self.definition["target_pitches"]
+            target_pitches = melody['melody']['target_pitches']
         else:
-            target_pitches = [(i - 12) for i in self.definition["target_pitches"]]
+            target_pitches = [(i - 12) for i in melody['melody']['target_pitches']]
 
         current_trial = self.position + 1
         show_current_trial = f'<i>Trial number {current_trial} out of {(TRIALS_PER_PARTICIPANT + N_REPEAT_TRIALS)} trials.</i>'
 
         return ModularPage(
-        "singing",
-        JSSynth(
-            Markup(
-                f"""
+            "singing",
+            JSSynth(
+                Markup(
+                    f"""
                 <h3>Sing back the melody</h3>
                 <hr>
                 <b><b>This melody has {len(target_pitches)} notes</b></b>: Sing each note clearly using the syllable '{SYLLABLE}'.
@@ -182,41 +182,44 @@ class SingingTrial(AudioRecordTrial, StaticTrial):
                 {show_current_trial}
                 <hr>
                 """
+                ),
+                [Note(pitch) for pitch in target_pitches],
+                timbre=TIMBRE,
+                default_duration=note_duration_tonejs,
+                default_silence=note_silence_tonejs,
             ),
-            [Note(pitch) for pitch in target_pitches],
-            timbre=TIMBRE,
-            default_duration=note_duration_tonejs,
-            default_silence=note_silence_tonejs,
-        ),
-        control=AudioRecordControl(
-            duration=singing_duration,
-            show_meter=True,
-            controls=False,
-            auto_advance=False,
-            bot_response_media="example_audio.wav",
-        ),
-        events={
-            "promptStart": Event(is_triggered_by="trialStart"),
-            "recordStart": Event(is_triggered_by="promptEnd", delay=0.25),
-        },
-        progress_display=ProgressDisplay(
-            stages=[
-                ProgressStage(melody_duration, "Listen to the melody...", "orange"),
-                ProgressStage(singing_duration, "Recording...SING THE MELODY!", "red"),
-                ProgressStage(0.5, "Done!", "green", persistent=True),
-            ],
-        ),
-        time_estimate=TIME_ESTIMATE_TRIAL,
-    )
+            control=AudioRecordControl(
+                duration=singing_duration,
+                show_meter=True,
+                controls=False,
+                auto_advance=False,
+                bot_response_media="example_audio.wav",
+            ),
+            events={
+                "promptStart": Event(is_triggered_by="trialStart"),
+                "recordStart": Event(is_triggered_by="promptEnd", delay=0.25),
+            },
+            progress_display=ProgressDisplay(
+                stages=[
+                    ProgressStage(melody_duration, "Listen to the melody...", "orange"),
+                    ProgressStage(singing_duration, "Recording...SING THE MELODY!", "red"),
+                    ProgressStage(0.5, "Done!", "green", persistent=True),
+                ],
+            ),
+            time_estimate=TIME_ESTIMATE_TRIAL,
+        )
 
     def analyze_recording(self, audio_file: str, output_plot: str):
+
+        melody = self.definition
+
         # convert to right register
         if self.participant.var.register == "high":
-            target_pitches = self.definition["target_pitches"]
-            reference_pitch = self.definition["reference_pitch"]
+            target_pitches =  melody['melody']['target_pitches']
+            reference_pitch =  melody['melody']['reference_pitch']
         else:
-            target_pitches = [(i - 12) for i in self.definition["target_pitches"]]
-            reference_pitch = self.definition["reference_pitch"] - 12
+            target_pitches = [(i - 12) for i in melody['melody']['target_pitches']]
+            reference_pitch = melody['melody']['reference_pitch'] - 12
 
         raw = sing.analyze(
             audio_file,
@@ -299,9 +302,9 @@ class Exp(psynet.experiment.Experiment):
 
     timeline = Timeline(
         NoConsent(),  # add consent
-        requirements(),
-        instructions(),
-        equipment_test(),
+        # requirements(),
+        # instructions(),
+        # equipment_test(),
         # get_voice_register(),  # not working
         CodeBlock(lambda participant: participant.var.set("register", "low")),  # only for debugging
         StaticTrialMaker(
@@ -315,12 +318,15 @@ class Exp(psynet.experiment.Experiment):
             n_repeat_trials=N_REPEAT_TRIALS,
             balance_across_nodes=True,
             target_n_participants=NUM_PARTICIPANTS,
-            check_performance_at_end=False,  # TODO: we want to implement a performance check using get_end_feedback_passed_page
+            check_performance_at_end=False,
+            # TODO: we want to implement a performance check using get_end_feedback_passed_page
         ),
         questionnaire(),
-        InfoPage("Next, we would like to ask you some questions about your music preferences (0.15 extra bonus)", time_estimate=3),
+        InfoPage("Next, we would like to ask you some questions about your music preferences (0.15 extra bonus)",
+                 time_estimate=3),
         STOMPR(),
-        InfoPage("Finally, we would like to ask you some questions about your personality (0.15 extra bonus)", time_estimate=3),
+        InfoPage("Finally, we would like to ask you some questions about your personality (0.15 extra bonus)",
+                 time_estimate=3),
         TIPI(),
         # debrief(),
         SuccessfulEndPage(),
