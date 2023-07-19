@@ -1,90 +1,75 @@
+import json
+
 from flask import Markup
 
 from dominate import tags
 
-from psynet.page import InfoPage, ModularPage
-from psynet.modular_page import PushButtonControl, AudioPrompt, RadioButtonControl, AudioMeterControl
-from psynet.timeline import CodeBlock, PageMaker, join, Event, Module
-from psynet.js_synth import JSSynth, Note
+from psynet.page import InfoPage, ModularPage, wait_while
+from psynet.modular_page import PushButtonControl, AudioPrompt, RadioButtonControl, AudioMeterControl, \
+    AudioRecordControl
+from psynet.trial.audio import AudioRecordTrial
+from psynet.timeline import CodeBlock, PageMaker, join, Event, Module, ProgressStage, ProgressDisplay
+from psynet.js_synth import JSSynth, Note, Rest
+from psynet.trial.static import StaticNode, StaticTrial, StaticTrialMaker
+from psynet.trial import compile_nodes_from_directory
+
+# singing
+from .params import singing_2intervals
+from sing4me import singing_extract as sing
+from sing4me import melodies
 from .melodies import convert_interval_sequence_to_absolute_pitches, sample_reference_pitch, sample_interval_sequence
 
+roving_width = 2.5
+roving_mean = dict(
+    default=55,
+    low=49,
+    high=61
+)
 
-# common pre-screens used in singing experiments
-def volume_calibration(timbre, note_duration, note_silence, time_estimate_per_trial=5):
+# volume test for tone js
+def tonejs_volume_test(timbre, note_duration, note_silence, time_estimate_per_trial=5):
     return ModularPage(
-                "tone_js_volume_test",
-                JSSynth(
-                    Markup(
-                        """
+        "tone_js_volume_test",
+        JSSynth(
+            Markup(
+                """
                         <h3>Volume calibration</h3>
                         <hr>
                         Set the volume in your laptop to a level in which you can hear each note properly.
                         <hr>
                         """
+            ),
+            sequence=[
+                Note(x)
+                for x in convert_interval_sequence_to_absolute_pitches(
+                    intervals=sample_interval_sequence(
+                        n_int=11,
+                        max_interval_size=8.5,
+                        max_melody_pitch_range=99,
+                        discrete=False,
+                        reference_mode="first_note",
                     ),
-                    sequence=[
-                        Note(x)
-                        for x in convert_interval_sequence_to_absolute_pitches(
-                            intervals=sample_interval_sequence(
-                                n_int=99,
-                                max_interval_size=8.5,
-                                max_melody_pitch_range=99,
-                                discrete=False,
-                                reference_mode="first_note",
-                            ),
-                            reference_pitch=sample_reference_pitch(55, 2.5),
-                            reference_mode="first_note",
-                        )
-                    ],
-                    timbre=timbre,
-                    default_duration=note_duration,
-                    default_silence=note_silence,
-                ),
-                time_estimate=time_estimate_per_trial
+                    reference_pitch=sample_reference_pitch(55, 2.5),
+                    reference_mode="first_note",
                 )
-
-
-def volume_calibration_page(audio, min_time=5, time_estimate=5.0):
-    text = tags.div()
-    with text:
-        tags.p(
-            """
-            Please listen to the following melody and adjust your
-            computer's output volume until it is at a comfortable level.
-            """
-        )
-        tags.p(
-            """
-            If you can't hear anything, there may be a problem with your
-            playback configuration or your internet connection.
-            You can refresh the page to try loading the audio again.
-            """
-        )
-
-    return ModularPage(
-        "volume_calibration",
-        AudioPrompt(audio, text, loop=True),
+            ],
+            timbre=timbre,
+            default_duration=note_duration,
+            default_silence=note_silence,
+        ),
+        time_estimate=time_estimate_per_trial,
         events={
-            "submitEnable": Event(is_triggered_by="trialStart", delay=min_time),
-        },
-        time_estimate=time_estimate,
+            "restartMelody": Event(
+                is_triggered_by="promptEnd",
+                delay=1.0,
+                js="psynet.trial.restart()"
+            ),
+            "submitEnable": Event(is_triggered_by="trialStart", delay=5)
+        }
     )
 
 
-def requirements():
-    html = tags.div()
-    with html:
-        tags.p(
-            "For this experiment we need to you to be sitting in a quiet room with a good internet connection. "
-            "If you can, please wear headphones or earphones for the best experience; "
-            "however, we ask that you do not wear wireless headphones/earphones (e.g. EarPods), "
-            "because they often introduce recording issues. "
-            "If you are not able to satisfy these requirements currently, please try again later."
-        )
-
-    return InfoPage(html, time_estimate=15)
-
-
+# self-report questions for input and output
 def audio_output_question():
     return ModularPage(
         "audio_output",
@@ -123,6 +108,16 @@ def audio_input_question():
     )
 
 
+# microphone test (optimized for singing)
+class SingingTestControl(AudioMeterControl):
+    # adjust default parameters to work nicely with voice
+    decay = {"display": 0.1, "high": 0.1, "low": 0.1}
+    threshold = {"high": -3, "low": -22}  #
+    grace = {"high": 0.2, "low": 1.5}
+    warn_on_clip = False
+    msg_duration = {"high": 0.25, "low": 0.25}
+
+
 def mic_test():
     html = tags.div()
 
@@ -143,33 +138,112 @@ def mic_test():
     return ModularPage(
         "mic_test",
         html,
-        AudioMeterControl(),
+        SingingTestControl(),
+        events={"submitEnable": Event(is_triggered_by="trialStart", delay=5)},
         time_estimate=10,
     )
 
 
-def get_voice_register():
-    return Module(
-        "get_voice_register",
-        ModularPage(
-            "get_voice_register",
-            tags.p(
-                "We'd like to play chords that fill well with your vocal range. ",
-                "What voice type best describes you?"
-            ),
-            PushButtonControl(
-                choices=["low", "high"],
-                labels=[
-                    "High (or female) voice",
-                    "Low (or male) voice",
-                ],
+# singing familiarization
+def recording_example():
+    return join(
+        InfoPage(
+            Markup(
+                f"""
+                <h3>Recording Example</h3>
+                <hr>
+                First, we will test if you can record your voice with the computer microphone. 
+                <br><br>
+                When ready, go to the next page and <b><b>sing 2 notes</b></b> using the syllable 'TA'.<br>
+                (separate each note with a silence). 
+                <hr>
+                """
             ),
             time_estimate=5,
-            save_answer="voice_type"
         ),
-        CodeBlock(lambda participant: participant.var.set(
-            "register",
-            participant.var.get_voice_register,
-            )
-        )
+        ModularPage(
+            "singing_record_example",
+            Markup(
+                f"""
+                <h3>Recording Example</h3>
+                Sing 2 notes to the syllable 'TA'<br> 
+                <i>Leave a silent gap between the notes</i>
+                """
+            ),
+            AudioRecordControl(
+                duration=5.0,
+                show_meter=True,
+                controls=False,
+                auto_advance=False,
+            ),
+            time_estimate=5,
+            progress_display=ProgressDisplay(
+                stages=[
+                    ProgressStage(5, "Recording.. Sing 2 notes!", "red"),
+                ],
+            ),
+        ),
+        wait_while(
+            lambda participant: not participant.assets["singing_record_example"].deposited,
+            expected_wait=5.0,
+            log_message="Waiting for the recording to finish uploading",
+        ),
+        PageMaker(
+            lambda participant: ModularPage(
+                "playback",
+                AudioPrompt(
+                    participant.assets["singing_record_example"],
+                    Markup(
+                        """
+                        <h3>Can you hear your recording?</h3>
+                        <hr>
+                        If you do not hear your recording, please make sure
+                        to use a working microphone so we can record your voice and continue with the experiment. 
+                        <hr>
+                        """
+                    ),
+                ),
+            ),
+            time_estimate=5,
+        ),
     )
+
+
+# singing performance: feedback + test
+# TODO: performance test: feedback + mini test + perforamnce test
+
+nodes_singing_performance = [
+    StaticNode(
+        definition={
+            "interval": interval,
+            "target_pitches": melodies.convert_interval_sequence_to_absolute_pitches(
+                intervals=[interval],
+                reference_pitch=melodies.sample_reference_pitch(
+                    roving_mean[register],
+                    roving_width
+                ),
+                reference_mode="previous_note",
+            ),
+        },
+    )
+    for interval in [-1.3, -2.6, 0.0, 1.3, 2.6]
+    for register in ["low", "high"]
+]
+
+
+practice = InfoPage(
+    Markup(
+        f"""
+        <h3>Singing practice</h3>
+        <hr>
+        In each trial, you will hear a melody with 2 notes:<br>
+        <b><b>Your goal is to sing each note back as accurately as possible.</b></b><br>
+        <i>Important:</i> Use the syllable 'TA' to sing each note and leave a silent gap between notes.
+        <br><br>
+        We will analyse your recording and provide feedback.
+        <hr>
+        When ready, click <b><b>next</b></b> to start singing.
+        """
+    ),
+    time_estimate=5,
+)

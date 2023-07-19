@@ -1,26 +1,21 @@
+from flask import Markup
 from dominate import tags
-
 from psynet.page import InfoPage
+
 
 html = tags.div()
 
 with html:
     tags.p(
         """
-        In this experiment you will hear melodies and be asked to sing them back as accurately as possible.
-        """
-    )
-
-    tags.p(
-        """
-        Sing each note in the melody clearly using the syllable 'TA' and leave silent gaps between notes.
+        In this experiment, you will hear melodies and be asked to sing them back as accurately as possible.
         """
     )
 
     tags.p(
         """
         We will monitor your responses throughout the experiment, and will give a small additional bonus
-        if your singing performance is good. 
+        if your performance is good. 
         """
     )
 

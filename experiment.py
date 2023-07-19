@@ -1,4 +1,3 @@
-import numpy as np
 from flask import Markup
 
 import psynet.experiment
@@ -11,18 +10,23 @@ from psynet.page import InfoPage, SuccessfulEndPage
 from psynet.timeline import Event, ProgressDisplay, ProgressStage, Timeline, CodeBlock, Module
 from psynet.trial.static import StaticNode, StaticTrial, StaticTrialMaker
 from psynet.trial.audio import AudioRecordTrial
+from psynet.prescreen import AntiphaseHeadphoneTest
 
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # experiment
 from .consent import consent
-from .instructions import instructions, requirements
+from .instructions import instructions
 from .questionnaire import debrief, questionnaire, STOMPR, TIPI
-from .pre_screens import volume_calibration, audio_output_question, audio_input_question, mic_test, get_voice_register
-from .params import singing_2intervals
+from .pre_screens import (
+    tonejs_volume_test,
+    mic_test,
+    recording_example
+)
 
 # sing4me
+from .params import singing_2intervals
 from sing4me import singing_extract as sing
 from sing4me import melodies
 
@@ -137,14 +141,42 @@ nodes = [
 ########################################################################################################################
 # experiment parts
 ########################################################################################################################
-def equipment_test():
+requirements = InfoPage(
+    Markup(
+        """
+        <h3>Requirements</h3>
+        <hr>
+        <b><b>For this experiment we need you to use headphones or earplugs with a working microphone</b></b>. 
+        <br><br>
+        However, we ask that you do not wear wireless headphones/earphones (e.g. EarPods),
+        they often introduce recording issues.
+        <br><br>
+        If you are not able to satisfy these requirements currently, please try again later
+        <hr>
+        """
+    ),
+    time_estimate=5
+)
+
+
+def equipment_tests():
     # Ask about what equipment they are using
     return Module(
-        "equipment_test",
-        volume_calibration(TIMBRE, note_duration_tonejs, note_silence_tonejs),
-        audio_output_question(),
-        audio_input_question(),
+        "equipment_tests",
+        InfoPage("You will now perform an audio test to make sure you are wearing headphones.", time_estimate=2),
+        # AntiphaseHeadphoneTest(),
+        InfoPage("You passed the headphone test!", time_estimate=2),
         mic_test(),
+        tonejs_volume_test(TIMBRE, note_duration_tonejs, note_silence_tonejs),
+    )
+
+
+def singing_tests():
+    # Ask about what equipment they are using
+    return Module(
+        "singing_tests",
+        recording_example()
+        # TODO: performance test: feedback + mini test + perforamnce test
     )
 
 
@@ -302,9 +334,10 @@ class Exp(psynet.experiment.Experiment):
 
     timeline = Timeline(
         NoConsent(),  # add consent
-        requirements(),
-        instructions(),
-        equipment_test(),
+        requirements,
+        # instructions(),
+        equipment_tests(),
+        singing_tests(),
         # get_voice_register(),  # not working
         CodeBlock(lambda participant: participant.var.set("register", "low")),  # only for debugging
         StaticTrialMaker(
