@@ -1,4 +1,5 @@
 from flask import Markup
+import random
 
 import psynet.experiment
 from psynet.asset import ExperimentAsset, Asset, LocalStorage, DebugStorage, FastFunctionAsset, S3Storage  # noqa
@@ -7,7 +8,7 @@ from psynet.modular_page import ModularPage, AudioRecordControl
 from psynet.js_synth import JSSynth, Note, HarmonicTimbre
 
 from psynet.page import InfoPage, SuccessfulEndPage
-from psynet.timeline import Event, ProgressDisplay, ProgressStage, Timeline, CodeBlock, Module
+from psynet.timeline import Event, ProgressDisplay, ProgressStage, Timeline, CodeBlock, conditional
 from psynet.trial.static import StaticNode, StaticTrial, StaticTrialMaker
 from psynet.trial.audio import AudioRecordTrial
 from psynet.prescreen import AntiphaseHeadphoneTest
@@ -17,12 +18,13 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # experiment
 from .consent import consent
-from .instructions import instructions
+from .instructions import instructions, requirements
 from .questionnaire import debrief, questionnaire, STOMPR, TIPI
 from .pre_screens import (
     tonejs_volume_test,
     mic_test,
-    recording_example
+    recording_example,
+    singing_performance
 )
 
 # sing4me
@@ -141,45 +143,6 @@ nodes = [
 ########################################################################################################################
 # experiment parts
 ########################################################################################################################
-requirements = InfoPage(
-    Markup(
-        """
-        <h3>Requirements</h3>
-        <hr>
-        <b><b>For this experiment we need you to use headphones or earplugs with a working microphone</b></b>. 
-        <br><br>
-        However, we ask that you do not wear wireless headphones/earphones (e.g. EarPods),
-        they often introduce recording issues.
-        <br><br>
-        If you are not able to satisfy these requirements currently, please try again later
-        <hr>
-        """
-    ),
-    time_estimate=5
-)
-
-
-def equipment_tests():
-    # Ask about what equipment they are using
-    return Module(
-        "equipment_tests",
-        InfoPage("You will now perform an audio test to make sure you are wearing headphones.", time_estimate=2),
-        # AntiphaseHeadphoneTest(),
-        InfoPage("You passed the headphone test!", time_estimate=2),
-        mic_test(),
-        tonejs_volume_test(TIMBRE, note_duration_tonejs, note_silence_tonejs),
-    )
-
-
-def singing_tests():
-    # Ask about what equipment they are using
-    return Module(
-        "singing_tests",
-        recording_example()
-        # TODO: performance test: feedback + mini test + perforamnce test
-    )
-
-
 class SingingTrial(AudioRecordTrial, StaticTrial):
     time_estimate = TIME_ESTIMATE_TRIAL
 
@@ -334,12 +297,36 @@ class Exp(psynet.experiment.Experiment):
 
     timeline = Timeline(
         NoConsent(),  # add consent
-        requirements,
-        # instructions(),
-        equipment_tests(),
-        singing_tests(),
-        # get_voice_register(),  # not working
-        CodeBlock(lambda participant: participant.var.set("register", "low")),  # only for debugging
+        instructions(),
+        requirements(),
+        # equipment tests
+        InfoPage("You will now perform an audio test to make sure you are wearing headphones.", time_estimate=2),
+        # AntiphaseHeadphoneTest(),  # TODO: uncomment for main experiment
+        InfoPage("Congratulations, you passed the headphone test!", time_estimate=2),
+        mic_test(),
+        tonejs_volume_test(TIMBRE, note_duration_tonejs, note_silence_tonejs),
+        # singing tests
+        InfoPage("Next, you will perform a series of singing exercises to make sure we can record your voice.",
+                 time_estimate=2),
+        recording_example(),
+        singing_performance(),
+        # we automatically assign register based on the predicted_register obtained from singing_performance
+        conditional(
+            label="assign_register",
+            condition=lambda experiment, participant: participant.var.predicted_register == "undefined",
+            logic_if_true=CodeBlock(
+                lambda experiment, participant: participant.var.set(
+                    "register", random.choice(["low", "high"]))
+            ),
+            logic_if_false=CodeBlock(lambda experiment, participant: participant.var.set(
+                "register",participant.var.predicted_register)
+                                     ),
+            fix_time_credit=False
+        ),
+        # You can use the line below to set the register manually (useful to debug and avoid the singing_performance)
+        # CodeBlock(lambda participant: participant.var.set("register", "low")),
+        # TODO: add practice phase, including feedback phase and test phase, just like in previous experiments
+        # main experiment
         StaticTrialMaker(
             id_="static_singing_trialmaker",
             trial_class=SingingTrial,
@@ -352,7 +339,6 @@ class Exp(psynet.experiment.Experiment):
             balance_across_nodes=True,
             target_n_participants=NUM_PARTICIPANTS,
             check_performance_at_end=False,
-            # TODO: we want to implement a performance check using get_end_feedback_passed_page
         ),
         questionnaire(),
         InfoPage("Next, we would like to ask you some questions about your music preferences (0.15 extra bonus)",
