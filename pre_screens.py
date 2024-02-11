@@ -258,6 +258,25 @@ nodes_singing_performance_test = [
 ]
 
 
+nodes_singing_performance_feedback = [
+    StaticNode(
+        definition={
+            "interval": interval,
+            "target_pitches": melodies.convert_interval_sequence_to_absolute_pitches(
+                intervals=[interval],
+                reference_pitch=melodies.sample_reference_pitch(
+                    roving_mean[register],
+                    roving_width
+                ),
+                reference_mode="previous_note",
+            ),
+        },
+    )
+    for interval in [-1.3, -2.6, 1.3, 2.6]
+    for register in ["low", "high"]
+]
+
+
 class SingingPerformanceTestTrial(AudioRecordTrial, StaticTrial):
     time_estimate = performance_trial_time_estimate
 
@@ -494,7 +513,7 @@ class SingingPerformanceFeedbackTrial(AudioRecordTrial, StaticTrial):
         ]
         sung_pitches = [x["median_f0"] for x in raw]
 
-        if len(sung_pitches) >= 1:
+        if len(sung_pitches) == 2:
             correct_num_notes = True
             failed = False
         else:
@@ -510,8 +529,26 @@ class SingingPerformanceFeedbackTrial(AudioRecordTrial, StaticTrial):
 
 class SingingPerformanceFeedbackTrialMaker(StaticTrialMaker):
     performance_check_type = "performance"
-    performance_threshold = 0.6
-    give_end_feedback_passed = False
+    give_end_feedback_passed = True
+    end_performance_check_waits = True
+
+    def performance_check(self, experiment, participant, participant_trials):
+        score = 0
+
+        for trial in participant_trials:
+            if not trial.analysis["failed"]:
+                score += 1
+        passed = score >= 0.5
+
+        return {"score": score, "passed": passed}
+
+    def get_end_feedback_passed_page(self, score):
+        score_to_display = "NA" if score is None else f"{((score / num_trials_feedback) * 100):.0f}"
+
+        return InfoPage(
+            Markup(f"""Your performance score was <strong>{score_to_display}&#37;</strong>."""),
+            time_estimate=3,
+        )
 
 
 class SingingPerformanceTestTrialMaker(StaticTrialMaker):
@@ -593,13 +630,13 @@ def singing_performance():
         SingingPerformanceFeedbackTrialMaker(
             id_="singing_performance_feedback",
             trial_class=SingingPerformanceFeedbackTrial,
-            nodes=nodes_singing_performance_test,
+            nodes=nodes_singing_performance_feedback,
             expected_trials_per_participant=num_trials_feedback,
             max_trials_per_participant=num_trials_feedback,
             recruit_mode="n_trials",
             target_n_participants=None,
-            check_performance_every_trial=True,
-            check_performance_at_end=False,
+            check_performance_every_trial=False,
+            check_performance_at_end=True,
         ),
         InfoPage(
             Markup(
