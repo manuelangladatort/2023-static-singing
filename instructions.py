@@ -1,4 +1,4 @@
-from flask import Markup
+from markupsafe import Markup
 from psynet.page import InfoPage
 
 

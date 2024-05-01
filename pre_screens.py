@@ -1,5 +1,5 @@
 import numpy as np
-from flask import Markup
+from markupsafe import Markup
 from dominate import tags
 
 from psynet.page import InfoPage, ModularPage, wait_while

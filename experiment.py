@@ -1,4 +1,4 @@
-from flask import Markup
+from markupsafe import Markup
 import random
 
 import psynet.experiment
@@ -291,9 +291,6 @@ class Exp(psynet.experiment.Experiment):
     asset_storage = LocalStorage()
     # asset_storage = S3Storage("psynet-tests", "audio-record")
 
-    config = {
-        "show_bonus": False
-    }
 
     timeline = Timeline(
         NoConsent(),  # add consent
@@ -302,13 +299,13 @@ class Exp(psynet.experiment.Experiment):
         # equipment tests
         InfoPage("You will now perform an audio test to make sure you are wearing headphones.", time_estimate=2),
         # AntiphaseHeadphoneTest(),  # TODO: uncomment for main experiment
-        # InfoPage("Congratulations, you passed the headphone test!", time_estimate=2),
-        # mic_test(),
-        # tonejs_volume_test(TIMBRE, note_duration_tonejs, note_silence_tonejs),
-        # # singing tests
-        # InfoPage("Next, you will perform a series of singing exercises to make sure we can record your voice.",
-        #          time_estimate=2),
-        # recording_example(),
+        InfoPage("Congratulations, you passed the headphone test!", time_estimate=2),
+        mic_test(),
+        tonejs_volume_test(TIMBRE, note_duration_tonejs, note_silence_tonejs),
+        # singing tests
+        InfoPage("Next, you will perform a series of singing exercises to make sure we can record your voice.",
+                 time_estimate=2),
+        recording_example(),
         singing_performance(),
         # we automatically assign register based on the predicted_register obtained from singing_performance
         conditional(
