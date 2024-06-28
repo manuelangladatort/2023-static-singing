@@ -2,7 +2,7 @@ from markupsafe import Markup
 import random
 
 import psynet.experiment
-from psynet.asset import ExperimentAsset, Asset, LocalStorage, DebugStorage, FastFunctionAsset, S3Storage  # noqa
+from psynet.asset import LocalStorage, DebugStorage
 from psynet.consent import NoConsent
 from psynet.modular_page import ModularPage, AudioRecordControl
 from psynet.js_synth import JSSynth, Note, HarmonicTimbre
@@ -11,15 +11,11 @@ from psynet.page import InfoPage, SuccessfulEndPage
 from psynet.timeline import Event, ProgressDisplay, ProgressStage, Timeline, CodeBlock, conditional
 from psynet.trial.static import StaticNode, StaticTrial, StaticTrialMaker
 from psynet.trial.audio import AudioRecordTrial
-from psynet.prescreen import AntiphaseHeadphoneTest
 
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # experiment
-from .consent import consent
-from .instructions import instructions, requirements
-from .questionnaire import debrief, questionnaire, STOMPR, TIPI
 from .pre_screens import (
     tonejs_volume_test,
     mic_test,
@@ -28,15 +24,15 @@ from .pre_screens import (
 )
 
 # sing4me
-from .params import singing_2intervals
 from sing4me import singing_extract as sing
-from sing4me import melodies
+from . sing import melodies
+from . sing.params import singing_2intervals
 
 ########################################################################################################################
 # Global
 ########################################################################################################################
 TIME_ESTIMATE_TRIAL = 10
-NUM_PARTICIPANTS = 100
+NUM_PARTICIPANTS = 10
 NUM_MELODIES = 5  # this is the total number of stimuli/ nodes
 TRIALS_PER_PARTICIPANT = NUM_MELODIES  # in this experiment num nodes is the same as num trials per participant
 
@@ -52,7 +48,7 @@ roving_mean = dict(
     high=61
 )
 
-NUM_NOTES = 3
+NUM_NOTES = 5
 NUM_INT = NUM_NOTES - 1
 SYLLABLE = "TA"
 TIME_AFTER_SINGING = 1
@@ -146,12 +142,7 @@ nodes = [
 class SingingTrial(AudioRecordTrial, StaticTrial):
     time_estimate = TIME_ESTIMATE_TRIAL
 
-    # wait_for_feedback = True
-
     def show_trial(self, experiment, participant):
-
-        # import pydevd_pycharm
-        # pydevd_pycharm.settrace('localhost', port=56922, stdoutToServer=True, stderrToServer=True)
 
         melody = self.definition
 
@@ -188,7 +179,7 @@ class SingingTrial(AudioRecordTrial, StaticTrial):
                 show_meter=True,
                 controls=False,
                 auto_advance=False,
-                bot_response_media="example_audio.wav",
+                bot_response_media="audio_5notes.wav",
             ),
             events={
                 "promptStart": Event(is_triggered_by="trialStart"),
@@ -287,24 +278,17 @@ class SingingTrial(AudioRecordTrial, StaticTrial):
 
 
 class Exp(psynet.experiment.Experiment):
-    label = "Static singing experiment"
-    asset_storage = LocalStorage()
-    # asset_storage = S3Storage("psynet-tests", "audio-record")
-
+    label = "Static singing experiment demo"
+    asset_storage = DebugStorage()
+    # asset_storage = LocalStorage()
 
     timeline = Timeline(
         NoConsent(),  # add consent
-        instructions(),
-        requirements(),
         # equipment tests
-        InfoPage("You will now perform an audio test to make sure you are wearing headphones.", time_estimate=2),
-        # AntiphaseHeadphoneTest(),  # TODO: uncomment for main experiment
-        InfoPage("Congratulations, you passed the headphone test!", time_estimate=2),
         mic_test(),
         tonejs_volume_test(TIMBRE, note_duration_tonejs, note_silence_tonejs),
         # singing tests
-        InfoPage("Next, you will perform a series of singing exercises to make sure we can record your voice.",
-                 time_estimate=2),
+        InfoPage("Next, you will perform a series of singing exercises to make sure we can record your voice.", time_estimate=2),
         recording_example(),
         singing_performance(),
         # we automatically assign register based on the predicted_register obtained from singing_performance
@@ -322,8 +306,7 @@ class Exp(psynet.experiment.Experiment):
         ),
         # You can use the line below to set the register manually (useful to debug and avoid the singing_performance)
         # CodeBlock(lambda participant: participant.var.set("register", "low")),
-        # TODO: add practice phase, including feedback phase and test phase, just like in previous experiments
-        # main experiment
+        # main singing experiment
         StaticTrialMaker(
             id_="static_singing_trialmaker",
             trial_class=SingingTrial,
@@ -337,14 +320,6 @@ class Exp(psynet.experiment.Experiment):
             target_n_participants=NUM_PARTICIPANTS,
             check_performance_at_end=False,
         ),
-        questionnaire(),
-        InfoPage("Next, we would like to ask you some questions about your music preferences (0.15 extra bonus)",
-                 time_estimate=3),
-        STOMPR(),
-        InfoPage("Finally, we would like to ask you some questions about your personality (0.15 extra bonus)",
-                 time_estimate=3),
-        TIPI(),
-        # debrief(),
         SuccessfulEndPage(),
     )
 

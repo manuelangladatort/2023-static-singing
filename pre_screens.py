@@ -12,10 +12,10 @@ from psynet.trial.static import StaticNode, StaticTrial, StaticTrialMaker
 from psynet.trial import compile_nodes_from_directory
 
 # singing
-from .params import singing_2intervals
 from sing4me import singing_extract as sing
-from sing4me import melodies
-from .melodies import convert_interval_sequence_to_absolute_pitches, sample_reference_pitch, sample_interval_sequence
+from . sing import melodies
+from . sing.params import singing_2intervals
+
 
 roving_width = 2.5
 roving_mean = dict(
@@ -40,15 +40,15 @@ def tonejs_volume_test(timbre, note_duration, note_silence, time_estimate_per_tr
             ),
             sequence=[
                 Note(x)
-                for x in convert_interval_sequence_to_absolute_pitches(
-                    intervals=sample_interval_sequence(
+                for x in melodies.convert_interval_sequence_to_absolute_pitches(
+                    intervals=melodies.sample_interval_sequence(
                         n_int=11,
                         max_interval_size=8.5,
                         max_melody_pitch_range=99,
                         discrete=False,
                         reference_mode="first_note",
                     ),
-                    reference_pitch=sample_reference_pitch(55, 2.5),
+                    reference_pitch=melodies.sample_reference_pitch(55, 2.5),
                     reference_mode="first_note",
                 )
             ],
