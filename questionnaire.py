@@ -1,7 +1,7 @@
 import random
 from dominate import tags
 
-from psynet.demography.general import Age, Gender
+from psynet.demography.general import BasicDemography, Language
 from psynet.demography.gmsi import GMSI
 from psynet.modular_page import ModularPage, TextControl, SurveyJSControl
 from psynet.page import InfoPage
@@ -12,7 +12,7 @@ def introduction():
     html = tags.div()
     with html:
         tags.p(
-            "Congratulations, you completed the listening part of this experiment!"
+            "Congratulations, you completed the main experiment!"
         )
         tags.p(
             "Before we finish, we would like to ask you a few questions about you. ",
@@ -24,10 +24,11 @@ def introduction():
 def questionnaire():
     return join(
         introduction(),
-        Age(),
-        Gender(),
-        GMSI(subscales=["Musical Training"]),
+        BasicDemography(),
+        # Language(),
+        GMSI(subscales=["Musical Training", "Singing Abilities"]),
         feedback(),
+        debrief()
     )
 
 
@@ -185,21 +186,14 @@ def debrief():
         tags.p(
             """
             Thank you for participating in this experiment. The purpose of the experiment was to collect data on how we 
-            perceive ‘pleasant’ melodies (sequences of musical tones), such as the ones you have been listening to.
+            perceive and sing melodies (sequences of musical tones), such as the ones you have been listening to. In particular, 
+            we are interested in studying the role of familiairty in the memory for melodies.
             """
         )
         tags.p(
             """
-            Pleasantness is very important to understand how we perceive and create musical melodies (the main musical 
-            idea in a piece of music, or that part that you can sing or hum along to). Other important aspects melodies 
-            are pitch (the series of notes that rise and fall in pitch) and rhythm (the timing and duration of these 
-            notes).
-            """
-        )
-        tags.p(
-            """
-            The data collected during this experiment will help to better understand how people derive pleasure from 
-            melodies, studying for the first time all possible melodic combinations and listeners' individual 
+            The data collected during this experiment will help to better understand how people perceive and memorize 
+            melodies from different musical cultures (e.g., Western vs. Non-Western) and study the role of listeners' individual 
             differences at a large scale (testing many melodies and participants from different backgrounds).
             """
         )
