@@ -65,12 +65,12 @@ def get_prolific_settings():
 
 
 DEBUG = False
-RECRUITER = "hotair" # "prolific" vs "hotair
+RECRUITER = "prolific" # "prolific" vs "hotair
 
 INITIAL_RECRUIT_SIZE = 5
 IS_PIANO = False # decide if we use piano timbre or not
 INITIAL_RECRUITMENT_SIZE = 5 # decide how many participants we recruit initially
-NUM_PARTICIPANTS = 30 # decide how many participants we recruit in total
+NUM_PARTICIPANTS = 50 # decide how many participants we recruit in total
 
 # time estiamtes trials
 TIME_ESTIMATE_LISTENING_TRIAL = 7
